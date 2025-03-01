@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -8,7 +8,7 @@ import {
   TextField,
   IconButton,
   Avatar,
-} from '@mui/material'
+} from "@mui/material";
 import {
   Save as SaveIcon,
   GitHub as GitHubIcon,
@@ -16,168 +16,203 @@ import {
   Twitter as TwitterIcon,
   Instagram as InstagramIcon,
   Description as ResumeIcon,
-} from '@mui/icons-material'
-import { toast } from 'react-toastify'
-import { supabase } from '../../config/supabase'
+} from "@mui/icons-material";
+import { bioApi, copyrightApi } from "../../api/SupabaseData";
+import { Toaster, toast } from "react-hot-toast";
 
 const BioForm = () => {
   const [bio, setBio] = useState({
-    name: '',
+    name: "",
     roles: [], // Should be configured as a text array in Supabase
-    description: '',
-    github: '',
-    resume: '',
-    linkedin: '',
-    twitter: '',
-    insta: '',
-    Image: '',
-  })
-  const [copyright, setCopyright] = useState('')
-  const [roleInput, setRoleInput] = useState('')
+    description: "",
+    github: "",
+    resume: "",
+    linkedin: "",
+    twitter: "",
+    insta: "",
+    image: "",
+  });
+  const [copyright, setCopyright] = useState("");
+  const [roleInput, setRoleInput] = useState("");
 
   const commonButtonSx = {
-    backgroundColor: '#0F172A',
-    '&:hover': { backgroundColor: '#1E293B' },
+    backgroundColor: "#0F172A",
+    "&:hover": { backgroundColor: "#1E293B" },
     borderRadius: 2,
-    textTransform: 'none',
+    textTransform: "none",
     px: 4,
-    minWidth: { xs: '100%', sm: '160px' }, // Set minimum width for consistency
+    minWidth: { xs: "100%", sm: "160px" }, // Set minimum width for consistency
     height: 42, // Set fixed height
-    fontSize: '0.875rem', // Set consistent font size
-  }
+    fontSize: "0.875rem", // Set consistent font size
+  };
+
+  const paperStyles = {
+    borderRadius: 4,
+    overflow: "hidden",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+    transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+    "&:hover": {
+      transform: "translateY(-2px)",
+      boxShadow: "0 8px 25px rgba(0,0,0,0.08)",
+    },
+  };
+
+  const textFieldStyles = {
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 2,
+      backgroundColor: "white",
+      transition: "all 0.2s ease-in-out",
+      "&:hover": {
+        backgroundColor: "#F8FAFC",
+        "& .MuiOutlinedInput-notchedOutline": {
+          borderColor: "#94A3B8",
+        },
+      },
+      "&.Mui-focused": {
+        backgroundColor: "#F8FAFC",
+        "& .MuiOutlinedInput-notchedOutline": {
+          borderColor: "#0F172A",
+        },
+      },
+    },
+  };
+
+  const socialIconStyles = (color) => ({
+    color: color,
+    transition: "all 0.2s ease-in-out",
+    "&:hover": {
+      backgroundColor: `${color}15`,
+      transform: "translateY(-2px)",
+    },
+  });
 
   useEffect(() => {
-    fetchBio()
-    fetchCopyright()
-  }, [])
+    fetchBio();
+    fetchCopyright();
+  }, []);
 
   const fetchBio = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bio')
-        .select('*')
-        .single()
-
-      if (error) throw error
-      console.log('Fetched bio:', data)
+      const data = await bioApi.fetch();
       setBio({
         ...data,
-        roles: Array.isArray(data?.roles) ? data.roles : [], // Ensure roles is always an array
-      })
-      setRoleInput(Array.isArray(data?.roles) ? data.roles.join(', ') : '') // Set initial role input
+        roles: Array.isArray(data?.roles) ? data.roles : [],
+      });
+      setRoleInput(Array.isArray(data?.roles) ? data.roles.join(", ") : "");
     } catch (error) {
-      console.error('Error fetching bio:', error)
-      toast.error('Error fetching bio: ' + error.message)
+      toast.error("Error fetching bio: " + error.message);
     }
-  }
+  };
 
   const handleSubmit = async () => {
+    const loadingToast = toast.loading("Updating bio...");
     try {
       if (!bio.name || !bio.description) {
-        toast.error('Please fill in all required fields')
-        return
+        toast.error("Please fill in all required fields");
+        return;
       }
 
-      const bioData = {
-        ...bio,
-        roles: Array.isArray(bio.roles) ? bio.roles : [], // Ensure roles is an array before saving
-      }
-
-      const { error } = await supabase
-        .from('bio')
-        .upsert(bioData)
-
-      if (error) throw error
-
-      await fetchBio()
-      toast.success('Bio updated successfully')
+      await bioApi.update(bio);
+      await fetchBio();
+      toast.dismiss(loadingToast);
+      toast.success("Bio updated successfully!");
     } catch (error) {
-      console.error('Error saving bio:', error)
-      toast.error('Error saving bio: ' + error.message)
+      toast.dismiss(loadingToast);
+      toast.error(`Failed to update bio: ${error.message}`);
     }
-  }
+  };
 
   const fetchCopyright = async () => {
     try {
-      const { data, error } = await supabase
-        .from('copyright')
-        .select('*')
-        .single()
-
-      if (error) throw error
-      console.log('Fetched copyright:', data)
-      setCopyright(data?.copyright || '')
+      const data = await copyrightApi.fetch();
+      setCopyright(data?.copyright || "");
     } catch (error) {
-      console.error('Error fetching copyright:', error)
-      toast.error('Error fetching copyright: ' + error.message)
+      console.error("Error fetching copyright:", error);
+      toast.error("Error fetching copyright: " + error.message);
     }
-  }
+  };
 
   const handleCopyrightSubmit = async () => {
     try {
-      const { error } = await supabase
-        .from('copyright')
-        .upsert({ 
-          id: 1, // Assuming you have only one copyright record
-          copyright: copyright.trim() 
-        })
-
-      if (error) throw error
-
-      await fetchCopyright()
-      toast.success('Copyright updated successfully')
+      await copyrightApi.update({ copyright: copyright.trim() });
+      await fetchCopyright();
+      toast.success("Copyright updated successfully");
     } catch (error) {
-      console.error('Error saving copyright:', error)
-      toast.error('Error saving copyright: ' + error.message)
+      console.error("Error saving copyright:", error);
+      toast.error("Error saving copyright: " + error.message);
     }
-  }
+  };
 
   const handleRoleChange = (e) => {
-    const value = e.target.value
-    setRoleInput(value) // Update the temporary input state
+    const value = e.target.value;
+    setRoleInput(value); // Update the temporary input state
 
     // Update the actual roles array only when needed
     const rolesArray = value
-      .split(',')
-      .map(role => role.trim())
-      .filter(Boolean)
-    
-    setBio(prev => ({
+      .split(",")
+      .map((role) => role.trim())
+      .filter(Boolean);
+
+    setBio((prev) => ({
       ...prev,
-      roles: rolesArray
-    }))
-  }
+      roles: rolesArray,
+    }));
+  };
 
   return (
-    <Box sx={{ maxWidth: 1200, margin: '0 auto', p: 3 }}>
-      <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <Box sx={{ 
-          backgroundColor: '#F8FAFC',
-          p: 4,
-          borderBottom: '1px solid',
-          borderColor: 'grey.200',
-        }}>
-          <Typography variant="h4" sx={{ fontWeight: 600, color: '#1E293B', mb: 1 }}>
-            Bio
+    <Box sx={{ maxWidth: 1200, margin: "0 auto", p: 3 }}>
+      <Paper sx={paperStyles}>
+        <Box
+          sx={{
+            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+            p: 4,
+            color: "white",
+          }}
+        >
+          <Typography
+            variant="h4"
+            sx={{
+              fontWeight: 700,
+              mb: 1,
+              background: "linear-gradient(135deg, #E2E8F0 0%, #FFFFFF 100%)",
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Bio Information
           </Typography>
-          <Typography variant="body1" sx={{ color: '#64748B' }}>
+          <Typography variant="body1" sx={{ color: "#94A3B8" }}>
             Manage your personal information and social links
           </Typography>
         </Box>
 
-        <Box sx={{ p: 4 }}>
+        <Box sx={{ p: 4, backgroundColor: "#FFFFFF" }}>
           <Grid container spacing={4}>
-            {/* Profile Image */}
+            {/* Profile Image Section */}
             <Grid item xs={12} display="flex" justifyContent="center">
-              <Box sx={{ position: 'relative' }}>
+              <Box
+                sx={{
+                  position: "relative",
+                  "&:hover": {
+                    "& .image-overlay": {
+                      opacity: 1,
+                    },
+                  },
+                }}
+              >
                 <Avatar
                   src={bio.image}
                   alt={bio.name}
                   sx={{
                     width: 150,
                     height: 150,
-                    border: '4px solid white',
-                    boxShadow: '0 4px 14px rgba(0,0,0,0.1)',
+                    border: "4px solid white",
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease",
+                    "&:hover": {
+                      transform: "scale(1.05)",
+                    },
                   }}
                 />
               </Box>
@@ -188,8 +223,9 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="Profile Image URL"
-                value={bio.image || ''}
-                onChange={(e) => setBio({ ...bio, Image: e.target.value })}
+                value={bio.image || ""}
+                onChange={(e) => setBio({ ...bio, image: e.target.value })}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -199,8 +235,9 @@ const BioForm = () => {
                 fullWidth
                 required
                 label="Name"
-                value={bio.name || ''}
+                value={bio.name || ""}
                 onChange={(e) => setBio({ ...bio, name: e.target.value })}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -212,6 +249,7 @@ const BioForm = () => {
                 value={roleInput} // Use roleInput instead of converting roles array
                 onChange={handleRoleChange}
                 helperText="Enter roles separated by commas (e.g., Developer, Designer, Writer)"
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -223,8 +261,11 @@ const BioForm = () => {
                 multiline
                 rows={4}
                 label="Description"
-                value={bio.description || ''}
-                onChange={(e) => setBio({ ...bio, description: e.target.value })}
+                value={bio.description || ""}
+                onChange={(e) =>
+                  setBio({ ...bio, description: e.target.value })
+                }
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -233,11 +274,14 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="GitHub URL"
-                value={bio.github || ''}
+                value={bio.github || ""}
                 onChange={(e) => setBio({ ...bio, github: e.target.value })}
                 InputProps={{
-                  startAdornment: <GitHubIcon sx={{ mr: 1, color: '#64748B' }} />,
+                  startAdornment: (
+                    <GitHubIcon sx={{ mr: 1, color: "#64748B" }} />
+                  ),
                 }}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -245,11 +289,14 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="LinkedIn URL"
-                value={bio.linkedin || ''}
+                value={bio.linkedin || ""}
                 onChange={(e) => setBio({ ...bio, linkedin: e.target.value })}
                 InputProps={{
-                  startAdornment: <LinkedInIcon sx={{ mr: 1, color: '#64748B' }} />,
+                  startAdornment: (
+                    <LinkedInIcon sx={{ mr: 1, color: "#64748B" }} />
+                  ),
                 }}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -257,11 +304,14 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="Twitter URL"
-                value={bio.twitter || ''}
+                value={bio.twitter || ""}
                 onChange={(e) => setBio({ ...bio, twitter: e.target.value })}
                 InputProps={{
-                  startAdornment: <TwitterIcon sx={{ mr: 1, color: '#64748B' }} />,
+                  startAdornment: (
+                    <TwitterIcon sx={{ mr: 1, color: "#64748B" }} />
+                  ),
                 }}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -269,11 +319,14 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="Instagram URL"
-                value={bio.insta || ''}
+                value={bio.insta || ""}
                 onChange={(e) => setBio({ ...bio, insta: e.target.value })}
                 InputProps={{
-                  startAdornment: <InstagramIcon sx={{ mr: 1, color: '#64748B' }} />,
+                  startAdornment: (
+                    <InstagramIcon sx={{ mr: 1, color: "#64748B" }} />
+                  ),
                 }}
+                sx={textFieldStyles}
               />
             </Grid>
 
@@ -281,26 +334,42 @@ const BioForm = () => {
               <TextField
                 fullWidth
                 label="Resume URL"
-                value={bio.resume || ''}
+                value={bio.resume || ""}
                 onChange={(e) => setBio({ ...bio, resume: e.target.value })}
                 InputProps={{
-                  startAdornment: <ResumeIcon sx={{ mr: 1, color: '#64748B' }} />,
+                  startAdornment: (
+                    <ResumeIcon sx={{ mr: 1, color: "#64748B" }} />
+                  ),
                 }}
+                sx={textFieldStyles}
               />
             </Grid>
 
             {/* Save Button */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: { xs: 'center', sm: 'flex-end' },
-                mt: 2 
-              }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: { xs: "center", sm: "flex-end" },
+                  mt: 2,
+                }}
+              >
                 <Button
                   variant="contained"
                   startIcon={<SaveIcon />}
                   onClick={handleSubmit}
-                  sx={commonButtonSx}
+                  sx={{
+                    ...commonButtonSx,
+                    background:
+                      "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                    transition: "all 0.2s ease-in-out",
+                    "&:hover": {
+                      background:
+                        "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+                      transform: "translateY(-2px)",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    },
+                  }}
                 >
                   Save Changes
                 </Button>
@@ -311,67 +380,65 @@ const BioForm = () => {
       </Paper>
 
       {/* Social Links Preview */}
-      <Paper sx={{ mt: 3, p: 3, borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <Typography variant="h6" sx={{ color: '#1E293B', mb: 2 }}>
+      <Paper sx={{ ...paperStyles, mt: 3, p: 3 }}>
+        <Typography
+          variant="h6"
+          sx={{
+            color: "#0F172A",
+            mb: 2,
+            fontWeight: 600,
+          }}
+        >
           Social Links Preview
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
           {bio.github && (
-            <IconButton 
+            <IconButton
               href={bio.github}
               target="_blank"
-              sx={{ 
-                color: '#1E293B',
-                '&:hover': { backgroundColor: '#F1F5F9' }
-              }}
+              sx={socialIconStyles("#24292e")}
             >
               <GitHubIcon />
             </IconButton>
           )}
           {bio.linkedin && (
-            <IconButton 
+            <IconButton
               href={bio.linkedin}
               target="_blank"
-              sx={{ 
-                color: '#0077B5',
-                '&:hover': { backgroundColor: '#F1F5F9' }
-              }}
+              sx={socialIconStyles("#0077B5")}
             >
               <LinkedInIcon />
             </IconButton>
           )}
           {bio.twitter && (
-            <IconButton 
+            <IconButton
               href={bio.twitter}
               target="_blank"
-              sx={{ 
-                color: '#1DA1F2',
-                '&:hover': { backgroundColor: '#F1F5F9' }
-              }}
+              sx={socialIconStyles("#1DA1F2")}
             >
               <TwitterIcon />
             </IconButton>
           )}
           {bio.insta && (
-            <IconButton 
+            <IconButton
               href={bio.insta}
               target="_blank"
-              sx={{ 
-                color: '#E4405F',
-                '&:hover': { backgroundColor: '#F1F5F9' }
-              }}
+              sx={socialIconStyles("#E4405F")}
             >
               <InstagramIcon />
             </IconButton>
           )}
           {bio.resume && (
-            <IconButton 
+            <IconButton
               href={bio.resume}
               target="_blank"
-              sx={{ 
-                color: '#1E293B',
-                '&:hover': { backgroundColor: '#F1F5F9' }
-              }}
+              sx={socialIconStyles("#1E293B")}
             >
               <ResumeIcon />
             </IconButton>
@@ -380,39 +447,53 @@ const BioForm = () => {
       </Paper>
 
       {/* Copyright Section */}
-      <Paper sx={{ mt: 3, p: { xs: 2, sm: 3 }, borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: 3 
-        }}>
-          <Typography variant="h6" sx={{ color: '#1E293B', mb: { xs: 2, sm: 0 } }}>
+      <Paper sx={{ ...paperStyles, mt: 3, p: { xs: 2, sm: 3 } }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            justifyContent: "space-between",
+            alignItems: { xs: "flex-start", sm: "center" },
+            mb: 3,
+          }}
+        >
+          <Typography
+            variant="h6"
+            sx={{
+              color: "#0F172A",
+              fontWeight: 600,
+              mb: { xs: 2, sm: 0 },
+            }}
+          >
             Copyright Information
           </Typography>
         </Box>
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: 'column',
-          gap: 2
-        }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
           <TextField
             fullWidth
             label="Copyright Text"
             value={copyright}
             onChange={(e) => setCopyright(e.target.value)}
             helperText="Example: © 2024 Your Name. All rights reserved."
+            sx={textFieldStyles}
           />
           <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" sx={{ color: '#64748B' }}>
-              Preview: {copyright || 'No copyright text set'}
+            <Typography variant="body2" sx={{ color: "#64748B" }}>
+              Preview: {copyright || "No copyright text set"}
             </Typography>
           </Box>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: { xs: 'stretch', sm: 'flex-end' }
-          }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: { xs: "stretch", sm: "flex-end" },
+            }}
+          >
             <Button
               variant="contained"
               startIcon={<SaveIcon />}
@@ -424,8 +505,18 @@ const BioForm = () => {
           </Box>
         </Box>
       </Paper>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            padding: "16px",
+            borderRadius: "8px",
+            fontSize: "14px",
+          },
+        }}
+      />
     </Box>
-  )
-}
+  );
+};
 
-export default BioForm
+export default BioForm;
