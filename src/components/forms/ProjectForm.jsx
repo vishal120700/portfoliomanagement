@@ -32,6 +32,10 @@ import {
   LinkedIn as LinkedInIcon,
   PersonAdd as PersonAddIcon,
   Business as BusinessIcon,
+  CheckCircleOutline as SuccessIcon,
+  ErrorOutline as ErrorIcon,
+  Info as InfoIcon,
+  Sync as LoadingIcon,
 } from "@mui/icons-material";
 import {
   projectsApi,
@@ -40,111 +44,220 @@ import {
 } from "../../api/SupabaseData";
 import { Toaster, toast } from "react-hot-toast";
 import { supabase } from "../../config/supabase";
+import { styled } from "@mui/system";
+import { motion } from "framer-motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 
+// Add these styled components at the top of your file
+const StyledDialog = styled(Dialog)`
+  .MuiDialog-paper {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(241, 245, 249, 0.2);
+    border-radius: 24px;
+    box-shadow: rgb(0 0 0 / 8%) 0px 20px 40px, rgb(0 0 0 / 6%) 0px 1px 3px;
+    overflow: hidden;
+  }
+`;
+
+const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
+  background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+  color: "white",
+  padding: "24px",
+  position: "relative",
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "1px",
+    background:
+      "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+  },
+}));
+
+// Add these responsive styles
 const styles = {
+  container: {
+    width: "100%",
+    p: { xs: 2, sm: 3 },
+    maxWidth: {
+      xs: "100%",
+      lg: 1200,
+    },
+    mx: "auto",
+  },
+
+  paper: {
+    borderRadius: { xs: 2, sm: 4 },
+    overflow: "hidden",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+  },
+
   gradientHeader: {
+    p: { xs: 2.5, sm: 4 },
     background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
     color: "white",
-    p: 4,
   },
 
   headerText: {
+    fontSize: { xs: "1.5rem", sm: "2rem", md: "2.25rem" },
+    lineHeight: { xs: 1.3, sm: 1.4 },
+    fontWeight: 700,
     background: "linear-gradient(135deg, #E2E8F0 0%, #FFFFFF 100%)",
     backgroundClip: "text",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
-    fontWeight: 700,
-    letterSpacing: "-0.01em",
   },
 
   projectCard: {
-    p: 3,
-    borderRadius: 3,
-    backgroundColor: "white",
-    transition: "all 0.3s ease",
-    border: "1px solid",
-    borderColor: "grey.200",
-    "&:hover": {
-      transform: "translateY(-4px)",
-      boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+    p: { xs: 2, sm: 3 },
+    "& .MuiGrid-container": {
+      flexDirection: { xs: "column", sm: "row" },
     },
   },
 
   imageContainer: {
+    height: { xs: "200px", sm: "200px" },
     width: "100%",
-    height: "200px",
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "#F8FAFC",
-    border: "1px solid",
-    borderColor: "grey.200",
-    transition: "transform 0.3s ease",
-    "&:hover": {
-      transform: "scale(1.02)",
-    },
+    mb: { xs: 2, sm: 0 },
   },
 
-  chip: {
-    backgroundColor: "#F1F5F9",
-    color: "#475569",
-    "&:hover": {
-      backgroundColor: "#E2E8F0",
-    },
+  contentSection: {
+    pl: { xs: 0, sm: 3 },
   },
 
-  iconButton: {
-    color: "#1E293B",
-    transition: "all 0.2s ease",
+  dialogContent: {
+    p: { xs: 2, sm: 3 },
+    "& .MuiGrid-container": {
+      "& .MuiGrid-item": {
+        width: { xs: "100%", sm: "auto" },
+      },
+    },
+    p: 3,
+    background:
+      "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.95) 100%)",
+  },
+
+  buttonContainer: {
+    display: { xs: "none", sm: "block" },
+  },
+
+  fabButton: {
+    position: "fixed",
+    bottom: 20,
+    right: 20,
+    display: { xs: "flex", sm: "none" },
+    background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
     "&:hover": {
-      backgroundColor: "#F1F5F9",
-      transform: "translateY(-2px)",
+      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
     },
   },
 
   dialogField: {
     "& .MuiOutlinedInput-root": {
-      borderRadius: 2,
-      transition: "all 0.2s ease",
-      "&:hover": {
-        backgroundColor: "#F8FAFC",
-        "& .MuiOutlinedInput-notchedOutline": {
-          borderColor: "#94A3B8",
-        },
-      },
-      "&.Mui-focused": {
-        backgroundColor: "#F8FAFC",
-        "& .MuiOutlinedInput-notchedOutline": {
-          borderColor: "#0F172A",
-          borderWidth: 2,
-        },
-      },
+      minHeight: { xs: "44px", sm: "48px" },
+      fontSize: { xs: "0.875rem", sm: "1rem" },
+    },
+    "& .MuiInputLabel-root": {
+      fontSize: { xs: "0.875rem", sm: "1rem" },
     },
   },
-
-  memberCard: {
-    p: 2,
-    borderRadius: 2,
-    backgroundColor: "white",
-    transition: "all 0.3s ease",
-    border: "1px solid",
-    borderColor: "grey.200",
+  cancelButton: {
+    borderColor: "#E2E8F0",
+    color: "#64748B",
+    borderRadius: "12px",
+    textTransform: "none",
+    fontWeight: 500,
+    px: 3,
     "&:hover": {
+      borderColor: "#CBD5E1",
+      backgroundColor: "#F1F5F9",
       transform: "translateY(-2px)",
-      boxShadow: "0 8px 16px rgba(0,0,0,0.06)",
     },
+    transition: "all 0.2s ease-in-out",
   },
-
-  avatar: {
-    width: 40,
-    height: 40,
-    transition: "transform 0.3s ease",
+  deleteButton: {
+    background: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
+    color: "white",
+    px: 3,
+    py: 1.5,
+    borderRadius: "12px",
+    textTransform: "none",
+    fontWeight: 600,
+    boxShadow: "0 4px 12px rgba(239,68,68,0.2)",
     "&:hover": {
-      transform: "scale(1.1)",
+      background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+      transform: "translateY(-2px)",
+      boxShadow: "0 6px 16px rgba(239,68,68,0.3)",
     },
+    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+  },
+};
+
+const toastConfig = {
+  position: "top-center",
+  style: {
+    background: "rgba(15, 23, 42, 0.95)",
+    color: "white",
+    backdropFilter: "blur(8px)",
+    borderRadius: "16px",
+    padding: "16px 24px",
+    maxWidth: "500px",
+    width: "90%",
+    border: "1px solid rgba(255,255,255,0.1)",
+    fontSize: "14px",
+    fontWeight: 500,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+  },
+  success: {
+    icon: (
+      <SuccessIcon
+        sx={{
+          animation: "rotate 0.5s ease-out",
+          "@keyframes rotate": {
+            "0%": { transform: "scale(0.5) rotate(-180deg)" },
+            "100%": { transform: "scale(1) rotate(0)" },
+          },
+        }}
+      />
+    ),
+    duration: 2000,
+  },
+  error: {
+    icon: (
+      <ErrorIcon
+        sx={{
+          animation: "shake 0.5s ease-in-out",
+          "@keyframes shake": {
+            "0%, 100%": { transform: "translateX(0)" },
+            "25%": { transform: "translateX(-4px)" },
+            "75%": { transform: "translateX(4px)" },
+          },
+        }}
+      />
+    ),
+    duration: 3000,
+  },
+  loading: {
+    icon: (
+      <LoadingIcon
+        sx={{
+          animation: "spin 1s linear infinite",
+          "@keyframes spin": {
+            "0%": { transform: "rotate(0deg)" },
+            "100%": { transform: "rotate(360deg)" },
+          },
+        }}
+      />
+    ),
+    duration: Infinity,
   },
 };
 
 const ProjectForm = () => {
+  const { enableBodyScroll, disableBodyScroll } = useScrollLock();
   const [projects, setProjects] = useState([]);
   const [open, setOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -201,6 +314,13 @@ const ProjectForm = () => {
 
   // Update the fetchProjects function
   const fetchProjects = async () => {
+    const loadingToast = toast.loading(
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Typography>Loading projects...</Typography>
+      </Box>,
+      { ...toastConfig }
+    );
+
     try {
       const projectsData = await projectsApi.fetch();
 
@@ -222,9 +342,20 @@ const ProjectForm = () => {
 
       console.log("Fetched projects with relations:", projectsWithRelations);
       setProjects(projectsWithRelations);
+      toast.success(
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>Projects loaded successfully</Typography>
+        </Box>,
+        { ...toastConfig, id: loadingToast }
+      );
     } catch (error) {
       console.error("Error details:", error);
-      toast.error("Error fetching projects: " + error.message);
+      toast.error(
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>Failed to load projects</Typography>
+        </Box>,
+        { ...toastConfig, id: loadingToast }
+      );
     }
   };
 
@@ -258,13 +389,24 @@ const ProjectForm = () => {
 
   // Update the handleSubmit function to handle relations correctly
   const handleSubmit = async () => {
-    const loadingToast = toast.loading("Saving project...");
-    try {
-      if (!currentProject.title || !currentProject.description) {
-        toast.error("Please fill in all required fields");
-        return;
-      }
+    if (!currentProject.title || !currentProject.description) {
+      toast.error(
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>Please fill in all required fields</Typography>
+        </Box>,
+        { ...toastConfig }
+      );
+      return;
+    }
 
+    const loadingToast = toast.loading(
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Typography>{editMode ? "Updating" : "Adding"} project...</Typography>
+      </Box>,
+      { ...toastConfig }
+    );
+
+    try {
       const projectData = {
         title: currentProject.title,
         description: currentProject.description,
@@ -312,14 +454,24 @@ const ProjectForm = () => {
 
       await fetchProjects();
       handleClose();
-      toast.dismiss(loadingToast);
       toast.success(
-        editMode ? "Project updated successfully" : "Project added successfully"
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>
+            Project {editMode ? "updated" : "added"} successfully
+          </Typography>
+        </Box>,
+        { ...toastConfig, id: loadingToast }
       );
     } catch (error) {
       console.error("Error saving:", error);
-      toast.dismiss(loadingToast);
-      toast.error("Error saving: " + error.message);
+      toast.error(
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>
+            Failed to {editMode ? "update" : "add"} project
+          </Typography>
+        </Box>,
+        { ...toastConfig, id: loadingToast }
+      );
     }
   };
 
@@ -352,6 +504,7 @@ const ProjectForm = () => {
   const handleDelete = (project) => {
     setItemToDelete(project);
     setDeleteDialogOpen(true);
+    disableBodyScroll();
   };
 
   const handleClose = () => {
@@ -569,11 +722,18 @@ const ProjectForm = () => {
       toast.success("Project deleted successfully");
       setDeleteDialogOpen(false);
       setItemToDelete(null);
+      enableBodyScroll();
     } catch (error) {
       toast.dismiss(loadingToast);
       console.error("Error deleting project:", error);
       toast.error("Error deleting project: " + error.message);
     }
+  };
+
+  const handleCloseDelete = () => {
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
+    enableBodyScroll();
   };
 
   return (
@@ -590,14 +750,12 @@ const ProjectForm = () => {
       }}
     >
       <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            padding: "16px",
-            borderRadius: "8px",
-            fontSize: "14px",
-          },
+        position="top-center"
+        toastOptions={toastConfig}
+        containerStyle={{
+          top: 20,
         }}
+        gutter={8}
       />
       {/* Main Projects List */}
       <Paper
@@ -1508,25 +1666,17 @@ const ProjectForm = () => {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <StyledDialog
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-            overflow: "hidden",
-          },
-        }}
+        onClose={handleCloseDelete}
+        maxWidth="sm"
+        fullWidth
+        TransitionComponent={motion.div}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
       >
-        <DialogTitle
-          sx={{
-            background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
-            color: "white",
-            px: 3,
-            py: 2,
-          }}
-        >
+        <StyledDialogTitle>
           <Box
             sx={{
               display: "flex",
@@ -1534,60 +1684,185 @@ const ProjectForm = () => {
               alignItems: "center",
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Delete Project
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <DeleteIcon sx={{ color: "#EF4444" }} />
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Delete Project
+              </Typography>
+            </Box>
             <IconButton
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={handleCloseDelete}
               sx={{
                 color: "white",
-                "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" },
+                "&:hover": {
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  transform: "rotate(90deg)",
+                },
+                transition: "all 0.3s ease",
               }}
             >
               <CloseIcon />
             </IconButton>
           </Box>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 4 }}>
-          <Typography>Are you sure you want to delete this project?</Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", mt: 1 }}>
-            This action cannot be undone.
-          </Typography>
+        </StyledDialogTitle>
+
+        <DialogContent sx={styles.dialogContent}>
+          {itemToDelete && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2.5,
+                  mb: 3,
+                  p: 3,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(241, 245, 249, 0.5)",
+                  backdropFilter: "blur(8px)",
+                }}
+              >
+                {/* Project Preview */}
+                <Box sx={{ display: "flex", gap: 2.5 }}>
+                  <Box
+                    sx={{
+                      width: 120,
+                      height: 80,
+                      borderRadius: 2,
+                      backgroundColor: "#F8FAFC",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    }}
+                  >
+                    {itemToDelete.image ? (
+                      <Box
+                        component="img"
+                        src={itemToDelete.image}
+                        alt={itemToDelete.title}
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <CodeIcon sx={{ fontSize: 40, color: "#94A3B8" }} />
+                    )}
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: 600, color: "#1E293B", mb: 0.5 }}
+                    >
+                      {itemToDelete.title}
+                    </Typography>
+                    <Chip
+                      label={itemToDelete.category}
+                      size="small"
+                      sx={{
+                        backgroundColor: "rgba(241, 245, 249, 0.8)",
+                        color: "#475569",
+                        fontSize: "0.75rem",
+                        height: "24px",
+                      }}
+                    />
+                  </Box>
+                </Box>
+
+                {/* Project Details */}
+                <Box
+                  sx={{
+                    mt: 2,
+                    pt: 2,
+                    borderTop: "1px dashed rgba(203, 213, 225, 0.5)",
+                  }}
+                >
+                  {/* Tags */}
+                  {itemToDelete.tags && itemToDelete.tags.length > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#94A3B8", display: "block", mb: 1 }}
+                      >
+                        Technologies & Tools
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        flexWrap="wrap"
+                        sx={{ gap: 1 }}
+                      >
+                        {itemToDelete.tags.map((tag, index) => (
+                          <Chip
+                            key={index}
+                            label={tag}
+                            size="small"
+                            sx={{
+                              backgroundColor: "rgba(241, 245, 249, 0.8)",
+                              color: "#475569",
+                              fontSize: "0.75rem",
+                              height: "24px",
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              <Typography
+                variant="body1"
+                sx={{ color: "#1E293B", mb: 2, fontWeight: 500 }}
+              >
+                Are you sure you want to delete this project?
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#64748B",
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                }}
+              >
+                ⚠️ This action cannot be undone. The project and all associated
+                data (members, associations, etc.) will be permanently removed.
+              </Typography>
+            </motion.div>
+          )}
         </DialogContent>
-        <DialogActions sx={{ p: 3, backgroundColor: "#F8FAFC" }}>
+
+        <DialogActions
+          sx={{
+            p: 3,
+            backgroundColor: "#F8FAFC",
+            borderTop: "1px solid rgba(226, 232, 240, 0.8)",
+          }}
+        >
           <Button
-            onClick={() => setDeleteDialogOpen(false)}
+            onClick={handleCloseDelete}
             variant="outlined"
-            sx={{
-              borderColor: "#E2E8F0",
-              color: "#64748B",
-              "&:hover": {
-                borderColor: "#CBD5E1",
-                backgroundColor: "#F1F5F9",
-              },
-            }}
+            sx={styles.cancelButton}
           >
             Cancel
           </Button>
           <Button
             onClick={handleConfirmDelete}
             variant="contained"
-            sx={{
-              background: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
-              color: "white",
-              px: 3,
-              py: 1,
-              borderRadius: 2,
-              textTransform: "none",
-              "&:hover": {
-                background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
-              },
-            }}
+            sx={styles.deleteButton}
           >
-            Delete
+            Delete Project
           </Button>
         </DialogActions>
-      </Dialog>
+      </StyledDialog>
     </Box>
   );
 };

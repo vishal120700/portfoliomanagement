@@ -19,18 +19,21 @@ export const copyrightApi = {
   fetch: async () => {
     const { data, error } = await supabase
       .from("copyright")
-      .select("*")
+      .select("id, copyright")
       .single();
+
     if (error) throw error;
     return data;
   },
 
-  update: async (copyrightData) => {
-    const { error } = await supabase.from("copyright").upsert({
-      id: 1,
-      ...copyrightData,
-    });
+  update: async (copyrightText) => {
+    const { error } = await supabase
+      .from("copyright")
+      .update({ copyright: copyrightText })
+      .eq("id", 1);
+
     if (error) throw error;
+    return true;
   },
 };
 
@@ -55,8 +58,7 @@ export const educationApi = {
     return data;
   },
 
-  update: async (educationData) => {
-    const { id, ...updateData } = educationData;
+  update: async (id, updateData) => {
     const { data, error } = await supabase
       .from("education")
       .update(updateData)

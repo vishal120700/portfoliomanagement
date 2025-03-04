@@ -23,6 +23,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  CircularProgress,
 } from "@mui/material";
 
 // Add all required icons
@@ -37,6 +38,11 @@ import {
   FileCopy as FileCopyIcon,
   Storage as StorageIcon,
   Cloud as CloudIcon,
+  CheckCircleOutline as SuccessIcon,
+  ErrorOutline as ErrorIcon,
+  Info as InfoIcon,
+  Sync as LoadingIcon,
+  PictureAsPdf as PdfIcon, // Add PictureAsPdf icon import
 } from "@mui/icons-material";
 import { storage as configuredStorage } from "../../config/firebase";
 import {
@@ -48,6 +54,42 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { Toaster, toast } from "react-hot-toast";
+
+// Add these imports at the top
+import { styled } from "@mui/material/styles";
+import { motion } from "framer-motion";
+
+// Add import
+import { useScrollLock } from "../../hooks/useScrollLock";
+
+// Create styled components
+const StyledDialog = styled(Dialog)`
+  .MuiDialog-paper {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(241, 245, 249, 0.2);
+    border-radius: 24px;
+    box-shadow: rgb(0 0 0 / 8%) 0px 20px 40px, rgb(0 0 0 / 6%) 0px 1px 3px;
+    overflow: hidden;
+  }
+`;
+
+const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
+  background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+  color: "white",
+  padding: "24px",
+  position: "relative",
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "1px",
+    background:
+      "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+  },
+}));
 
 // Copy the styles object from ImageUploadForm
 const styles = {
@@ -155,9 +197,10 @@ const styles = {
   tableContainer: {
     mt: 4,
     borderRadius: 2,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
     overflow: "auto",
     width: "100%",
+    border: "1px solid rgba(226, 232, 240, 0.8)",
     "& .MuiTable-root": {
       minWidth: "100%",
     },
@@ -179,18 +222,28 @@ const styles = {
   },
   tableHeader: {
     backgroundColor: "#F8FAFC",
+    "& th": {
+      borderBottom: "2px solid rgba(226, 232, 240, 0.8)",
+    },
   },
   tableHeaderCell: {
-    color: "#1E293B",
+    color: "#64748B",
     fontWeight: 600,
     fontSize: "0.875rem",
     whiteSpace: "nowrap",
     py: 2,
+    px: 3,
+    transition: "all 0.2s ease",
   },
   tableRow: {
-    transition: "background-color 0.2s ease",
+    transition: "all 0.2s ease",
     "&:hover": {
-      backgroundColor: "#F8FAFC",
+      backgroundColor: "#F1F5F9",
+    },
+    "& td": {
+      borderBottom: "1px solid rgba(226, 232, 240, 0.8)",
+      py: 2,
+      px: 3,
     },
   },
 
@@ -263,6 +316,75 @@ const styles = {
       backgroundColor: "#F1F5F9",
     },
   },
+
+  // Update the styles object
+  dialogHeader: {
+    background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+    color: "white",
+    px: 3,
+    py: 2.5,
+    position: "relative",
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "1px",
+      background:
+        "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+    },
+  },
+
+  dialogContent: {
+    p: 4,
+    background:
+      "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.95) 100%)",
+  },
+
+  deleteButton: {
+    background: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
+    color: "white",
+    px: 3,
+    py: 1.5,
+    borderRadius: "12px",
+    textTransform: "none",
+    fontWeight: 600,
+    boxShadow: "0 4px 12px rgba(239,68,68,0.2)",
+    "&:hover": {
+      background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+      transform: "translateY(-2px)",
+      boxShadow: "0 6px 16px rgba(239,68,68,0.3)",
+    },
+    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+  },
+
+  cancelButton: {
+    borderColor: "#E2E8F0",
+    color: "#64748B",
+    borderRadius: "12px",
+    textTransform: "none",
+    fontWeight: 500,
+    "&:hover": {
+      borderColor: "#CBD5E1",
+      backgroundColor: "#F1F5F9",
+      transform: "translateY(-2px)",
+    },
+    transition: "all 0.2s ease-in-out",
+  },
+
+  // Add to styles object
+  pdfPreview: {
+    width: 60,
+    height: 60,
+    borderRadius: 1,
+    backgroundColor: "#F8FAFC",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#DC2626",
+  },
 };
 
 const dialogStyles = {
@@ -301,7 +423,116 @@ const dialogStyles = {
   },
 };
 
+// Update the ToastMessage component
+const ToastMessage = ({ title, description }) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+    <Box sx={{ flex: 1 }}>
+      <Typography sx={{ fontWeight: 500, fontSize: "0.875rem" }}>
+        {title}
+      </Typography>
+      {description && (
+        <Typography sx={{ fontSize: "0.75rem", opacity: 0.9, mt: 0.5 }}>
+          {description}
+        </Typography>
+      )}
+    </Box>
+  </Box>
+);
+
+// Update toast configuration
+const toastConfig = {
+  position: "top-center",
+  duration: 3000,
+  style: {
+    background: "rgba(15, 23, 42, 0.95)",
+    color: "white",
+    backdropFilter: "blur(8px)",
+    borderRadius: "16px",
+    padding: "16px 24px",
+    maxWidth: "500px",
+    width: "90%",
+    border: "1px solid rgba(255,255,255,0.1)",
+    fontSize: "14px",
+    fontWeight: 500,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+  },
+  success: {
+    style: {
+      background: "rgba(16, 185, 129, 0.95)",
+    },
+    icon: (
+      <SuccessIcon
+        sx={{
+          animation: "rotate 0.5s ease-out",
+          "@keyframes rotate": {
+            "0%": { transform: "scale(0.5) rotate(-180deg)" },
+            "100%": { transform: "scale(1) rotate(0)" },
+          },
+        }}
+      />
+    ),
+  },
+  error: {
+    style: {
+      background: "rgba(239, 68, 68, 0.95)",
+    },
+    icon: (
+      <ErrorIcon
+        sx={{
+          animation: "shake 0.5s ease-in-out",
+          "@keyframes shake": {
+            "0%, 100%": { transform: "translateX(0)" },
+            "25%": { transform: "translateX(-4px)" },
+            "75%": { transform: "translateX(4px)" },
+          },
+        }}
+      />
+    ),
+  },
+  loading: {
+    style: {
+      background: "rgba(30, 41, 59, 0.95)",
+    },
+    icon: (
+      <LoadingIcon
+        sx={{
+          animation: "spin 1s linear infinite",
+          "@keyframes spin": {
+            "0%": { transform: "rotate(0deg)" },
+            "100%": { transform: "rotate(360deg)" },
+          },
+        }}
+      />
+    ),
+    duration: Infinity,
+  },
+  info: {
+    style: {
+      background: "rgba(59, 130, 246, 0.95)",
+    },
+    icon: <InfoIcon sx={{ animation: "fadeIn 0.5s ease-in" }} />,
+  },
+};
+
+// Add the showToast helper function
+const showToast = (message, type = "success") => {
+  toast.dismiss();
+
+  return toast[type](
+    <ToastMessage
+      title={typeof message === "string" ? message : message.title}
+      description={typeof message === "string" ? null : message.description}
+    />,
+    {
+      ...toastConfig[type],
+      duration: type === "loading" ? Infinity : toastConfig.duration,
+    }
+  );
+};
+
 const StorageForm = () => {
+  const { enableBodyScroll, disableBodyScroll } = useScrollLock();
+
   // Copy the state and functions related to bucket images from ImageUploadForm
   const [bucketImages, setBucketImages] = useState([]);
   const [page, setPage] = useState(0);
@@ -318,21 +549,30 @@ const StorageForm = () => {
   const [selectedFolder, setSelectedFolder] = useState("root");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Copy the necessary functions from ImageUploadForm
   const fetchBucketImages = async () => {
+    const loadingToast = toast.loading("Loading storage data...", {
+      ...toastConfig,
+    });
+
     try {
       const storageRef = ref(configuredStorage);
       const result = await listAll(storageRef);
       const allItems = [];
+      const folderSet = new Set(["root"]);
 
       // Get items from root
       for (const item of result.items) {
         allItems.push(item);
       }
 
-      // Get items from all folders
+      // Get items from folders and collect folder names
       for (const folder of result.prefixes) {
+        folderSet.add(folder.fullPath);
         const folderResult = await listAll(folder);
         for (const item of folderResult.items) {
           allItems.push(item);
@@ -344,6 +584,12 @@ const StorageForm = () => {
           try {
             const url = await getDownloadURL(item);
             const metadata = await getMetadata(item);
+
+            // Skip files that are 0 bytes but keep folder markers
+            if (metadata.size === 0 && !item.name.endsWith(".folder")) {
+              return null;
+            }
+
             return {
               id: item.name,
               name: metadata.customMetadata?.customName || item.name,
@@ -353,6 +599,7 @@ const StorageForm = () => {
               contentType: metadata.contentType,
               path: item.fullPath,
               folder: item.parent.fullPath || "root",
+              isFolder: item.name.endsWith(".folder"),
             };
           } catch (error) {
             console.error(`Error processing item ${item.name}:`, error);
@@ -361,18 +608,26 @@ const StorageForm = () => {
         })
       );
 
-      const validImages = imagesData.filter((image) => image !== null);
+      // Filter out null values and non-folder 0 byte files
+      const validImages = imagesData.filter(
+        (image) =>
+          image !== null && (!image.isFolder || image.name.endsWith(".folder"))
+      );
+
       validImages.sort(
         (a, b) => new Date(b.uploadTime) - new Date(a.uploadTime)
       );
 
-      const uniqueFolders = [...new Set(validImages.map((img) => img.folder))];
-      setFolders(uniqueFolders);
-
+      // Set folders from the collected set
+      setFolders(Array.from(folderSet));
       setBucketImages(validImages);
+
+      toast.dismiss(loadingToast);
+      toast.success("Storage data loaded successfully");
     } catch (error) {
       console.error("Error fetching bucket images:", error);
-      toast.error(`Failed to fetch images: ${error.message}`);
+      toast.dismiss(loadingToast);
+      toast.error(`Failed to fetch storage data: ${error.message}`);
     }
   };
 
@@ -413,19 +668,35 @@ const StorageForm = () => {
 
   const handleCopyUrl = (url) => {
     navigator.clipboard.writeText(url);
-    toast.success("URL copied to clipboard!", {
-      icon: "📋",
-    });
+    toast.success(
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Typography>URL copied to clipboard!</Typography>
+      </Box>,
+      { ...toastConfig }
+    );
   };
 
-  const handleDelete = (image) => {
-    // Pass the full image object instead of just the path
-    setItemToDelete(image);
+  const handleDelete = (item) => {
+    setItemToDelete(item);
     setDeleteDialogOpen(true);
+    disableBodyScroll();
+  };
+
+  const handleCloseDelete = () => {
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
+    enableBodyScroll();
   };
 
   const handleConfirmDelete = async () => {
-    const loadingToast = toast.loading("Deleting file...");
+    const loadingId = showToast(
+      {
+        title: "Deleting file...",
+        description: itemToDelete?.name,
+      },
+      "loading"
+    );
+
     try {
       if (!itemToDelete) {
         throw new Error("No file selected for deletion");
@@ -440,14 +711,19 @@ const StorageForm = () => {
       // Refresh the file list
       await fetchBucketImages();
 
-      toast.dismiss(loadingToast);
-      toast.success("File deleted successfully!");
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
+      showToast({
+        title: "File deleted successfully",
+        description: itemToDelete.name,
+      });
+      handleCloseDelete();
     } catch (error) {
-      toast.dismiss(loadingToast);
-      console.error("Error deleting file:", error);
-      toast.error(`Failed to delete file: ${error.message}`);
+      showToast(
+        {
+          title: "Failed to delete file",
+          description: error.message,
+        },
+        "error"
+      );
     }
   };
 
@@ -561,7 +837,10 @@ const StorageForm = () => {
     const file = event.target.files[0];
     if (file) {
       setSelectedFile(file);
-      toast.success("File selected successfully!");
+      showToast({
+        title: "File selected successfully",
+        description: `${file.name} (${formatFileSize(file.size)})`,
+      });
     }
   };
 
@@ -599,11 +878,23 @@ const StorageForm = () => {
   const handleUploadFile = async (event) => {
     event.preventDefault();
     if (!selectedFile) {
-      toast.error("Please select a file");
+      toast.error(
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography>Please select a file</Typography>
+        </Box>,
+        { ...toastConfig }
+      );
       return;
     }
 
-    const loadingToast = toast.loading("Uploading file...");
+    const loadingId = showToast(
+      {
+        title: "Uploading file...",
+        description: selectedFile.name,
+      },
+      "loading"
+    );
+
     try {
       const filePath =
         selectedFolder === "root"
@@ -614,32 +905,52 @@ const StorageForm = () => {
       await uploadBytes(fileRef, selectedFile);
 
       await fetchBucketImages();
-      toast.dismiss(loadingToast);
-      toast.success("File uploaded successfully!");
+
+      showToast({
+        title: "File uploaded successfully",
+        description: selectedFile.name,
+      });
       handleCloseFileDialog();
     } catch (error) {
-      toast.dismiss(loadingToast);
-      toast.error(`Failed to upload file: ${error.message}`);
+      showToast(
+        {
+          title: "Failed to upload file",
+          description: error.message,
+        },
+        "error"
+      );
     }
   };
 
+  // Update the Stats component to align with four cards
   const Stats = () => {
     const currentFolderFiles = bucketImages.filter(
-      (img) => img.folder === currentFolder
+      (img) => img.folder === currentFolder && !img.isFolder && img.size > 0
     );
+
     const folderSize = currentFolderFiles.reduce(
       (sum, img) => sum + img.size,
       0
     );
-
-    // Assuming total storage limit is 1GB (1024 * 1024 * 1024 bytes)
-    const totalStorage = 1024 * 1024 * 1024;
-    const usedStorage = bucketImages.reduce((sum, img) => sum + img.size, 0);
+    const totalStorage = 1024 * 1024 * 1024; // 1GB
+    const usedStorage = bucketImages.reduce(
+      (sum, img) => sum + (img.size > 0 ? img.size : 0),
+      0
+    );
     const remainingStorage = totalStorage - usedStorage;
     const usedPercentage = Math.round((usedStorage / totalStorage) * 100);
 
     return (
-      <Box sx={styles.statsContainer}>
+      <Box
+        sx={{
+          ...styles.statsContainer,
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, 1fr)",
+            md: "repeat(4, 1fr)",
+          },
+        }}
+      >
         <Paper sx={styles.statCard}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
             <FileCopyIcon sx={{ color: "#64748B" }} />
@@ -665,7 +976,7 @@ const StorageForm = () => {
             <FolderIcon sx={{ color: "#64748B" }} />
             <Typography sx={styles.statLabel}>Total Folders</Typography>
           </Box>
-          <Typography sx={styles.statValue}>{folders.length}</Typography>
+          <Typography sx={styles.statValue}>{folders.length - 1}</Typography>
         </Paper>
 
         <Paper sx={styles.statCard}>
@@ -674,7 +985,7 @@ const StorageForm = () => {
             <Typography sx={styles.statLabel}>Storage Used</Typography>
           </Box>
           <Typography sx={styles.statValue}>
-            {formatFileSize(usedStorage)} / {formatFileSize(totalStorage)}
+            {formatFileSize(usedStorage)}
           </Typography>
           <Box
             sx={{ mt: 1, width: "100%", bgcolor: "#F1F5F9", borderRadius: 1 }}
@@ -689,7 +1000,10 @@ const StorageForm = () => {
               }}
             />
           </Box>
-          <Typography variant="caption" sx={{ color: "#64748B", mt: 0.5 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: "#64748B", mt: 0.5, display: "block" }}
+          >
             {formatFileSize(remainingStorage)} remaining
           </Typography>
         </Paper>
@@ -697,45 +1011,169 @@ const StorageForm = () => {
     );
   };
 
+  // Add this component inside StorageForm
+  const EmptyState = ({ folder }) => (
+    <Box sx={{ textAlign: "center", py: 8, px: 3 }}>
+      <CloudIcon sx={{ fontSize: 64, color: "#CBD5E1", mb: 2 }} />
+      <Typography variant="h6" sx={{ color: "#1E293B", mb: 1 }}>
+        No files in {folder === "root" ? "storage" : folder}
+      </Typography>
+      <Typography variant="body2" sx={{ color: "#64748B", mb: 3 }}>
+        Upload files or create folders to organize your content
+      </Typography>
+      <Button
+        variant="contained"
+        onClick={handleOpenFileDialog}
+        startIcon={<AddIcon />}
+        sx={{
+          background: "linear-gradient(135deg, #1E293B 0%, #0F172A 100%)",
+        }}
+      >
+        Upload File
+      </Button>
+    </Box>
+  );
+
+  // Update the TableSkeleton component with better animation
+  const TableSkeleton = () => (
+    <Box sx={{ opacity: 0.7 }}>
+      {[...Array(rowsPerPage)].map((_, index) => (
+        <Box
+          key={index}
+          sx={{
+            height: "60px",
+            my: 1,
+            px: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            bgcolor: "#F8FAFC",
+            borderRadius: 1,
+            animation: "pulse 1.5s ease-in-out infinite",
+            "@keyframes pulse": {
+              "0%, 100%": { opacity: 1 },
+              "50%": { opacity: 0.5 },
+            },
+            animationDelay: `${index * 0.1}s`, // Add staggered animation delay
+          }}
+        >
+          {/* Preview Cell */}
+          <Box
+            sx={{
+              width: 60,
+              height: 60,
+              borderRadius: 1,
+              bgcolor: "#E2E8F0",
+            }}
+          />
+
+          {/* Content Cell */}
+          <Box sx={{ flex: 1 }}>
+            <Box
+              sx={{
+                width: "60%",
+                height: 16,
+                bgcolor: "#E2E8F0",
+                mb: 1,
+                borderRadius: 0.5,
+              }}
+            />
+            <Box
+              sx={{
+                width: "40%",
+                height: 12,
+                bgcolor: "#E2E8F0",
+                borderRadius: 0.5,
+              }}
+            />
+          </Box>
+
+          {/* Actions Cell */}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                bgcolor: "#E2E8F0",
+              }}
+            />
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                bgcolor: "#E2E8F0",
+              }}
+            />
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+
+  // Add these handlers inside StorageForm
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.currentTarget.style.borderColor = "#0F172A";
+    event.currentTarget.style.backgroundColor = "#F1F5F9";
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.currentTarget.style.borderColor = "#CBD5E1";
+    event.currentTarget.style.backgroundColor = "#F8FAFC";
+  };
+
+  const handleDrop = async (event) => {
+    event.preventDefault();
+    event.currentTarget.style.borderColor = "#CBD5E1";
+    event.currentTarget.style.backgroundColor = "#F8FAFC";
+
+    const files = Array.from(event.dataTransfer.files);
+    const validFiles = files.filter(
+      (file) =>
+        file.type.startsWith("image/") || file.type === "application/pdf"
+    );
+
+    if (validFiles.length === 0) {
+      showToast(
+        {
+          title: "Invalid file type",
+          description: "Please drop only image or PDF files",
+        },
+        "error"
+      );
+      return;
+    }
+
+    setSelectedFile(validFiles[0]);
+    showToast({
+      title: "File selected",
+      description: `${validFiles[0].name} (${formatFileSize(
+        validFiles[0].size
+      )})`,
+    });
+  };
+
+  // Update the currentFiles filter logic to not show 0 byte files
+  const currentFiles = bucketImages.filter((image) => {
+    if (image.size === 0) return false;
+    return currentFolder === "root" || image.folder === currentFolder;
+  });
+
   return (
     // ... copy the bucket images table JSX from ImageUploadForm
     <Box sx={{ width: "100%", p: 3 }}>
       <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            padding: "16px",
-            borderRadius: "8px",
-            fontSize: "14px",
-          },
-          success: {
-            style: {
-              background: "#10B981",
-              color: "white",
-            },
-            iconTheme: {
-              primary: "white",
-              secondary: "#10B981",
-            },
-          },
-          error: {
-            style: {
-              background: "#EF4444",
-              color: "white",
-            },
-            iconTheme: {
-              primary: "white",
-              secondary: "#EF4444",
-            },
-          },
-          loading: {
-            style: {
-              background: "#1E293B",
-              color: "white",
-            },
-          },
+        position="top-center"
+        toastOptions={toastConfig}
+        containerStyle={{
+          top: 20,
+          right: 20,
+          left: 20,
         }}
+        gutter={8}
       />
       <Paper
         sx={{
@@ -837,10 +1275,10 @@ const StorageForm = () => {
                 .filter((folder) => folder !== "root")
                 .map((folder) => {
                   const filesCount = bucketImages.filter(
-                    (img) => img.folder === folder
+                    (img) => img.folder === folder && img.size > 0
                   ).length;
                   const folderSize = bucketImages
-                    .filter((img) => img.folder === folder)
+                    .filter((img) => img.folder === folder && img.size > 0)
                     .reduce((sum, img) => sum + img.size, 0);
 
                   return (
@@ -871,130 +1309,205 @@ const StorageForm = () => {
 
           {/* Filter table contents based on current folder */}
           <TableContainer sx={styles.tableContainer}>
-            <Table sx={{ width: "100%" }}>
-              <TableHead>
-                <TableRow sx={styles.tableHeader}>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "10%" }}>
-                    Preview
-                  </TableCell>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "20%" }}>
-                    File Name
-                  </TableCell>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
-                    Folder
-                  </TableCell>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
-                    Type
-                  </TableCell>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "10%" }}>
-                    Size
-                  </TableCell>
-                  <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
-                    Upload Date
-                  </TableCell>
-                  <TableCell
-                    sx={{ ...styles.tableHeaderCell, width: "15%" }}
-                    align="right"
-                  >
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {bucketImages
-                  .filter((image) => image.folder === currentFolder)
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((image) => (
-                    <TableRow key={image.id} sx={styles.tableRow}>
-                      <TableCell sx={{ width: "10%" }}>
-                        <Box
-                          component="img"
-                          src={image.url}
-                          alt={image.name}
-                          sx={{
-                            width: 80,
-                            height: 80,
-                            objectFit: "cover",
-                            borderRadius: 1,
-                            transition: "transform 0.2s ease",
-                            "&:hover": {
-                              transform: "scale(1.05)",
-                            },
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ width: "20%" }}>
-                        <Tooltip title={image.name}>
-                          <Typography noWrap>{image.name}</Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell sx={{ width: "15%" }}>
-                        <Tooltip title={image.folder}>
-                          <Typography noWrap>{image.folder}</Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell sx={{ width: "15%" }}>
-                        <Tooltip title={image.contentType}>
-                          <Typography noWrap>{image.contentType}</Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell sx={{ width: "10%" }}>
-                        {formatFileSize(image.size)}
-                      </TableCell>
-                      <TableCell sx={{ width: "15%" }}>
-                        {new Date(image.uploadTime).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell sx={{ width: "15%" }} align="right">
-                        <Tooltip title="Rename">
-                          <IconButton
-                            onClick={() => handleOpenRenameDialog(image)}
-                            sx={{
-                              color: "#1E293B",
-                              "&:hover": {
+            {isLoading ? (
+              <TableSkeleton />
+            ) : currentFiles.length === 0 && currentFolder !== "root" ? (
+              <EmptyState folder={currentFolder} />
+            ) : (
+              <Table sx={{ width: "100%" }}>
+                <TableHead>
+                  <TableRow sx={styles.tableHeader}>
+                    <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
+                      Preview
+                    </TableCell>
+                    <TableCell sx={{ ...styles.tableHeaderCell, width: "25%" }}>
+                      File Name
+                    </TableCell>
+                    <TableCell sx={{ ...styles.tableHeaderCell, width: "20%" }}>
+                      Type
+                    </TableCell>
+                    <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
+                      Size
+                    </TableCell>
+                    <TableCell sx={{ ...styles.tableHeaderCell, width: "15%" }}>
+                      Upload Date
+                    </TableCell>
+                    <TableCell
+                      sx={{ ...styles.tableHeaderCell, width: "10%" }}
+                      align="right"
+                    >
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {currentFiles
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((image) => (
+                      <TableRow key={image.id} sx={styles.tableRow}>
+                        <TableCell>
+                          {image.contentType === "application/pdf" ? (
+                            <Box
+                              sx={{
+                                width: 60,
+                                height: 60,
+                                borderRadius: "8px",
+                                backgroundColor: "#F8FAFC",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#DC2626",
+                                transition: "transform 0.2s ease",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                                "&:hover": {
+                                  transform: "scale(1.05)",
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                                },
+                              }}
+                            >
+                              <PdfIcon sx={{ fontSize: 32 }} />
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "#64748B", mt: 0.5 }}
+                              >
+                                PDF
+                              </Typography>
+                            </Box>
+                          ) : image.url ? (
+                            <Box
+                              component="img"
+                              src={image.url}
+                              alt={image.name}
+                              loading="lazy"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src =
+                                  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect width="100%" height="100%" fill="%23f1f5f9"/><text x="50%" y="50%" font-family="Arial" font-size="12" fill="%2364748b" text-anchor="middle" dy=".3em">No Preview</text></svg>';
+                              }}
+                              sx={{
+                                width: 60,
+                                height: 60,
+                                objectFit: "cover",
+                                borderRadius: "8px",
+                                transition: "transform 0.2s ease",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                                 backgroundColor: "#F1F5F9",
-                                transform: "translateY(-2px)",
-                              },
-                              transition: "all 0.2s ease",
-                            }}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Copy URL">
-                          <IconButton
-                            onClick={() => handleCopyUrl(image.url)}
-                            sx={{
-                              color: "#1E293B",
-                              "&:hover": {
+                                "&:hover": {
+                                  transform: "scale(1.05)",
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                                },
+                              }}
+                            />
+                          ) : (
+                            <Box
+                              sx={{
+                                width: 60,
+                                height: 60,
+                                borderRadius: "8px",
                                 backgroundColor: "#F1F5F9",
-                                transform: "translateY(-2px)",
-                              },
-                              transition: "all 0.2s ease",
-                            }}
-                          >
-                            <ContentCopyIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton
-                            onClick={() => handleDelete(image)} // Pass the full image object
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#64748B",
+                                fontSize: "12px",
+                              }}
+                            >
+                              No Preview
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography
                             sx={{
-                              color: "#EF4444",
-                              "&:hover": {
-                                backgroundColor: "#FEE2E2",
-                                transform: "translateY(-2px)",
-                              },
-                              transition: "all 0.2s ease",
+                              fontWeight: 500,
+                              color: "#1E293B",
+                              fontSize: "0.875rem",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: "200px",
                             }}
                           >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
+                            {image.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            sx={{
+                              color: "#64748B",
+                              fontSize: "0.875rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            <FileCopyIcon sx={{ fontSize: 16 }} />
+                            {image.contentType.split("/")[1].toUpperCase()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            sx={{ color: "#64748B", fontSize: "0.875rem" }}
+                          >
+                            {formatFileSize(image.size)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            sx={{ color: "#64748B", fontSize: "0.875rem" }}
+                          >
+                            {new Date(image.uploadTime).toLocaleDateString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Box
+                            sx={{
+                              display: "flex",
+                              gap: 1,
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            <Tooltip title="Copy URL">
+                              <IconButton
+                                onClick={() => handleCopyUrl(image.url)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": {
+                                    backgroundColor: "#F1F5F9",
+                                    color: "#1E293B",
+                                    transform: "translateY(-2px)",
+                                  },
+                                  transition: "all 0.2s ease",
+                                }}
+                                size="small"
+                              >
+                                <ContentCopyIcon sx={{ fontSize: 20 }} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton
+                                onClick={() => handleDelete(image)}
+                                sx={{
+                                  color: "#EF4444",
+                                  "&:hover": {
+                                    backgroundColor: "#FEE2E2",
+                                    transform: "translateY(-2px)",
+                                  },
+                                  transition: "all 0.2s ease",
+                                }}
+                                size="small"
+                              >
+                                <DeleteIcon sx={{ fontSize: 20 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            )}
           </TableContainer>
           <TablePagination
             rowsPerPageOptions={[5, 10, 25, 50]}
@@ -1106,6 +1619,7 @@ const StorageForm = () => {
         </form>
       </Dialog>
 
+      {/* Add File Upload Dialog */}
       <Dialog
         open={openFileDialog}
         onClose={handleCloseFileDialog}
@@ -1115,42 +1629,78 @@ const StorageForm = () => {
         <DialogTitle sx={styles.dialogTitle}>Upload File</DialogTitle>
         <form onSubmit={handleUploadFile}>
           <DialogContent sx={{ mt: 2, px: 3, pb: 3 }}>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {/* File Upload Area */}
-              <Box
-                component="label"
-                sx={{
-                  ...dialogStyles.uploadArea,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="file"
-                  hidden
-                  onChange={handleFileSelect}
-                  accept="image/*"
-                />
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 1,
-                  }}
-                >
-                  <AddIcon sx={{ fontSize: 40, color: "#64748B" }} />
-                  <Typography variant="body1" color="text.secondary">
-                    Click to select or drag and drop your file
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Supported formats: PNG, JPG, GIF up to 10MB
+            <Box
+              sx={dialogStyles.uploadArea}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {isUploading ? (
+                <Box sx={{ textAlign: "center" }}>
+                  <CircularProgress
+                    variant="determinate"
+                    value={uploadProgress}
+                    size={48}
+                    sx={{ mb: 2 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Uploading... {uploadProgress}%
                   </Typography>
                 </Box>
-              </Box>
+              ) : (
+                <Box component="label" sx={{ cursor: "pointer" }}>
+                  <input
+                    type="file"
+                    hidden
+                    onChange={handleFileSelect}
+                    accept="image/*,.pdf"
+                  />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <AddIcon sx={{ fontSize: 40, color: "#64748B" }} />
+                    <Typography variant="body1" color="text.secondary">
+                      Click to select or drag and drop your file
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Supported formats: PNG, JPG, GIF, PDF up to 10MB
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            </Box>
 
-              {/* Selected File Info */}
-              {selectedFile && (
-                <Box sx={dialogStyles.fileInfo}>
+            {/* Selected File Info */}
+            {selectedFile && (
+              <Box sx={dialogStyles.fileInfo}>
+                {selectedFile.type === "application/pdf" ? (
+                  <Box
+                    sx={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 1,
+                      backgroundColor: "#F8FAFC",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#DC2626",
+                    }}
+                  >
+                    <PdfIcon sx={{ fontSize: 32 }} />
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", mt: 0.5 }}
+                    >
+                      PDF
+                    </Typography>
+                  </Box>
+                ) : (
                   <Box
                     component="img"
                     src={URL.createObjectURL(selectedFile)}
@@ -1162,53 +1712,53 @@ const StorageForm = () => {
                       objectFit: "cover",
                     }}
                   />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" noWrap>
-                      {selectedFile.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatFileSize(selectedFile.size)}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={() => setSelectedFile(null)}
-                    sx={{ color: "#EF4444" }}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+                )}
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="body2" noWrap>
+                    {selectedFile.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatFileSize(selectedFile.size)}
+                  </Typography>
                 </Box>
-              )}
-
-              {/* Folder Selection */}
-              <FormControl fullWidth>
-                <InputLabel>Destination Folder</InputLabel>
-                <Select
-                  value={selectedFolder}
-                  onChange={(e) => setSelectedFolder(e.target.value)}
-                  label="Destination Folder"
+                <IconButton
+                  size="small"
+                  onClick={() => setSelectedFile(null)}
+                  sx={{ color: "#EF4444" }}
                 >
-                  <MenuItem value="root">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <FolderIcon sx={{ color: "#64748B" }} />
-                      Root Folder
-                    </Box>
-                  </MenuItem>
-                  {folders
-                    .filter((f) => f !== "root")
-                    .map((folder) => (
-                      <MenuItem key={folder} value={folder}>
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
-                          <FolderIcon sx={{ color: "#64748B" }} />
-                          {folder}
-                        </Box>
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </Box>
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            )}
+
+            {/* Folder Selection */}
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Destination Folder</InputLabel>
+              <Select
+                value={selectedFolder}
+                onChange={(e) => setSelectedFolder(e.target.value)}
+                label="Destination Folder"
+              >
+                <MenuItem value="root">
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <FolderIcon sx={{ color: "#64748B" }} />
+                    Root Folder
+                  </Box>
+                </MenuItem>
+                {folders
+                  .filter((f) => f !== "root")
+                  .map((folder) => (
+                    <MenuItem key={folder} value={folder}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <FolderIcon sx={{ color: "#64748B" }} />
+                        {folder}
+                      </Box>
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
           </DialogContent>
           <DialogActions sx={styles.dialogActions}>
             <Button onClick={handleCloseFileDialog}>Cancel</Button>
@@ -1258,68 +1808,140 @@ const StorageForm = () => {
         </form>
       </Dialog>
 
-      <Dialog
+      <StyledDialog
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={handleCloseDelete}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-            overflow: "hidden",
-          },
-        }}
+        TransitionComponent={motion.div}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
       >
-        <DialogTitle sx={styles.dialogHeader}>
-          <Box sx={styles.dialogHeaderContent}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Delete File
-            </Typography>
+        <StyledDialogTitle>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <DeleteIcon sx={{ color: "#EF4444" }} />
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Delete File
+              </Typography>
+            </Box>
             <IconButton
-              onClick={() => setDeleteDialogOpen(false)}
-              sx={styles.dialogCloseButton}
+              onClick={handleCloseDelete}
+              sx={{
+                color: "white",
+                "&:hover": {
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  transform: "rotate(90deg)",
+                },
+                transition: "all 0.3s ease",
+              }}
             >
               <CloseIcon />
             </IconButton>
           </Box>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 4 }}>
+        </StyledDialogTitle>
+
+        <DialogContent sx={styles.dialogContent}>
           {itemToDelete && (
-            <>
-              <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 2.5,
+                  mb: 3,
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(241, 245, 249, 0.5)",
+                  backdropFilter: "blur(8px)",
+                }}
+              >
                 <Box
                   component="img"
                   src={itemToDelete.url}
                   alt={itemToDelete.name}
                   sx={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 1,
+                    width: 80,
+                    height: 80,
+                    borderRadius: 2,
                     objectFit: "cover",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                   }}
                 />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      color: "#1E293B",
+                      mb: 0.5,
+                    }}
+                  >
                     {itemToDelete.name}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: "#64748B" }}>
                     {formatFileSize(itemToDelete.size)}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#94A3B8",
+                      display: "block",
+                      mt: 1,
+                    }}
+                  >
+                    Uploaded on{" "}
+                    {new Date(itemToDelete.uploadTime).toLocaleDateString()}
                   </Typography>
                 </Box>
               </Box>
-              <Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "#1E293B",
+                  mb: 2,
+                  fontWeight: 500,
+                }}
+              >
                 Are you sure you want to delete this file?
               </Typography>
-              <Typography variant="body2" sx={{ color: "#64748B", mt: 1 }}>
-                This action cannot be undone.
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#64748B",
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                }}
+              >
+                ⚠️ This action cannot be undone. The file will be permanently
+                removed from storage.
               </Typography>
-            </>
+            </motion.div>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 3, backgroundColor: "#F8FAFC" }}>
+
+        <DialogActions
+          sx={{
+            p: 3,
+            backgroundColor: "#F8FAFC",
+            borderTop: "1px solid rgba(226, 232, 240, 0.8)",
+          }}
+        >
           <Button
-            onClick={() => setDeleteDialogOpen(false)}
+            onClick={handleCloseDelete}
             variant="outlined"
             sx={styles.cancelButton}
           >
@@ -1330,10 +1952,10 @@ const StorageForm = () => {
             variant="contained"
             sx={styles.deleteButton}
           >
-            Delete
+            Delete File
           </Button>
         </DialogActions>
-      </Dialog>
+      </StyledDialog>
     </Box>
   );
 };
