@@ -22,7 +22,6 @@ import ContactForm from "./components/forms/ContactForm.jsx";
 import ImageUploadForm from "./components/forms/ImageUploadForm";
 import StorageForm from "./components/forms/StorageForm";
 import Footer from "./components/Footer";
-
 import { supabase } from "./config/supabase";
 
 const App = () => {
